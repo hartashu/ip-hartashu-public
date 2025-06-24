@@ -1,0 +1,40 @@
+const errorHandler = (error, req, res, next) => {
+  let statusCode = 500;
+  let message = "Internal Server Error";
+
+  console.log(error);
+
+  if (
+    error.name === "SequelizeValidationError" ||
+    error.name === "SequelizeUniqueConstraintError"
+  ) {
+    statusCode = 400;
+    message = error.errors.map((error) => error.message);
+  } else if (error.message === "EMPTY_USERNAME_PASSWORD") {
+    statusCode = 400;
+    message = "Username or password is empty";
+  } else if (error.message === "INVALID_CREDENTIALS") {
+    statusCode = 401;
+    message = "Invalid username or password";
+  } else if (
+    error.message === "INVALID_TOKEN" ||
+    error.name === "JsonWebTokenError"
+  ) {
+    statusCode = 401;
+    message = "Invalid token";
+  } else if (error.message === "FORBIDDEN") {
+    statusCode = 403;
+    message = "Forbidden to access";
+  } else if (error.message === "INVALID_ID") {
+    statusCode = 404;
+    message = "Error not found";
+  }
+
+  res.status(statusCode).json({
+    error: {
+      message,
+    },
+  });
+};
+
+module.exports = errorHandler;
