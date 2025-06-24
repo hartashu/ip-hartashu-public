@@ -1,3 +1,7 @@
+if (process.env.NODE_ENV !== "production") {
+  require("dotenv").config();
+}
+
 const express = require("express");
 const cors = require("cors");
 const { createServer } = require("node:http");
@@ -22,17 +26,35 @@ const io = new Server(server, {
   },
 });
 
-io.on("connect", (socket) => {
-  console.log(`User ${socket.id} connected`);
+io.on("connection", (socket) => {
+  console.log(`New user connected: ${socket.id}`);
 
-  socket.emit("welcome", "WELCOME TO THE SERVER!");
-
-  socket.emit("chat message", (msg) => {
-    console.log(msg);
+  socket.on("userConnected", (username) => {
+    console.log(`User ${username} (${socket.id}) connected.`);
+    io.emit("message", {
+      username: "Server",
+      message: `${username} has joined the chat.`,
+    });
   });
 
-  socket.on("disconnect", () => {
-    console.log(`User ${socket.id} disconnected`);
+  socket.on("chatMessage", (data) => {
+    if (data && data.username && data.message) {
+      console.log(`A message from ${data.username}: ${data.message}`);
+      io.emit("message", {
+        username: data.username,
+        message: data.message,
+      });
+    } else {
+      console.log(`Received: ${data}`);
+    }
+  });
+
+  socket.on("disconnect", (username) => {
+    console.log(`User ${username} (${socket.id}) disconnected.`);
+    io.emit("message", {
+      username: "Server",
+      message: `${username} has left the chat.`,
+    });
   });
 });
 

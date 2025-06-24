@@ -18,7 +18,8 @@ const errorHandler = (error, req, res, next) => {
     message = "Invalid username or password";
   } else if (
     error.message === "INVALID_TOKEN" ||
-    error.name === "JsonWebTokenError"
+    error.name === "JsonWebTokenError" ||
+    error.message === "EMPTY_GOOGLE_ACCESS_TOKEN"
   ) {
     statusCode = 401;
     message = "Invalid token";

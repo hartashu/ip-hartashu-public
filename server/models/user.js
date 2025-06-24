@@ -10,6 +10,9 @@ module.exports = (sequelize, DataTypes) => {
      */
     static associate(models) {
       // define association here
+      User.hasMany(models.Message, {
+        foreignKey: "userId",
+      });
     }
   }
   User.init(
@@ -75,10 +78,12 @@ module.exports = (sequelize, DataTypes) => {
     },
     {
       hooks: {
+        // beforeValidate: (user, options) => {
+        //   user.imgUrl =
+        //     "https://static.vecteezy.com/system/resources/previews/021/548/095/non_2x/default-profile-picture-avatar-user-avatar-icon-person-icon-head-icon-profile-picture-icons-default-anonymous-user-male-and-female-businessman-photo-placeholder-social-network-avatar-portrait-free-vector.jpg";
+        // },
         beforeCreate: (user, options) => {
           user.password = hashPassword(user.password);
-          user.imgUrl =
-            "https://static.vecteezy.com/system/resources/previews/021/548/095/non_2x/default-profile-picture-avatar-user-avatar-icon-person-icon-head-icon-profile-picture-icons-default-anonymous-user-male-and-female-businessman-photo-placeholder-social-network-avatar-portrait-free-vector.jpg";
         },
       },
       sequelize,
