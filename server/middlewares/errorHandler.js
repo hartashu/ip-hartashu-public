@@ -12,10 +12,10 @@ const errorHandler = (error, req, res, next) => {
     message = error.errors.map((error) => error.message);
   } else if (error.message === "EMPTY_USERNAME_PASSWORD") {
     statusCode = 400;
-    message = "Username or password is empty";
+    message = "Username/email or password is empty";
   } else if (error.message === "INVALID_CREDENTIALS") {
     statusCode = 401;
-    message = "Invalid username or password";
+    message = "Invalid username/email or password";
   } else if (
     error.message === "INVALID_TOKEN" ||
     error.name === "JsonWebTokenError" ||

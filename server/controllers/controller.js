@@ -2,9 +2,15 @@ const { compareHash } = require("../helpers/bcrypt");
 const { generateToken } = require("../helpers/jwt");
 const { OAuth2Client } = require("google-auth-library");
 const { User, Message } = require("../models");
-const summarizeByAi = require("../helpers/gemini");
+const summarizedByAi = require("../helpers/gemini");
+
+let ioInstance;
 
 class Controller {
+  static setIo(io) {
+    ioInstance = io;
+  }
+
   // ========== user ==========
   static async postLogin(req, res, next) {
     try {
@@ -90,7 +96,7 @@ class Controller {
 
   static async postRegister(req, res, next) {
     try {
-      const { username, email, password } = req.body();
+      const { username, email, password } = req.body;
 
       if (!username || !email || !password) {
         throw new Error("EMPTY_USERNAME_PASSWORD");
@@ -100,6 +106,8 @@ class Controller {
         username,
         email,
         password,
+        imgUrl:
+          "https://static.vecteezy.com/system/resources/previews/021/548/095/non_2x/default-profile-picture-avatar-user-avatar-icon-person-icon-head-icon-profile-picture-icons-default-anonymous-user-male-and-female-businessman-photo-placeholder-social-network-avatar-portrait-free-vector.jpg",
       });
 
       res.status(201).json({
@@ -108,6 +116,7 @@ class Controller {
           id: createdUser.id,
           username: createdUser.username,
           email: createdUser.email,
+          imgUrl: createdUser.imgUrl,
         },
       });
     } catch (error) {
@@ -128,6 +137,7 @@ class Controller {
       messages = messages.map((message) => {
         return {
           username: message.User.username,
+          imgUrl: message.User.imgUrl,
           message: message.message,
         };
       });
@@ -257,9 +267,16 @@ class Controller {
         },
       });
 
-      const summary = await summarizeByAi(
+      const summary = await summarizedByAi(
         messages.map((message) => message.message).join("\n\n")
       );
+
+      if (ioInstance) {
+        ioInstance.emit("summaryBroadcast", {
+          username: "AI Summary",
+          message: summary,
+        });
+      }
 
       res.status(200).json({
         message: summary,
@@ -278,6 +295,43 @@ class Controller {
       });
     } catch (error) {
       throw new Error("INVALID_ID");
+    }
+  }
+
+  // ========== user ==========
+  static async updateUserById(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { imgUrl } = req.body;
+
+      console.log("MASUK CONTROLLER UPDATE USER BY ID");
+
+      const foundUser = await User.findByPk(+id);
+
+      if (!foundUser) {
+        throw new Error("INVALID_ID");
+      }
+
+      await User.update(
+        {
+          imgUrl,
+        },
+        {
+          where: {
+            id: +id,
+          },
+        }
+      );
+
+      res.status(200).json({
+        message: "Success update user",
+        data: {
+          id: foundUser.id,
+          imgUrl: foundUser.imgUrl,
+        },
+      });
+    } catch (error) {
+      next(error);
     }
   }
 }

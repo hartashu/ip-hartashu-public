@@ -61,4 +61,6 @@ io.on("connect", (socket) => {
   });
 });
 
+Controller.setIo(io);
+
 module.exports = server;

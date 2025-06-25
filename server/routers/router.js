@@ -19,5 +19,6 @@ router.get("/messages", Controller.getMessages);
 
 router.patch("/messages", Controller.updateMessageIsSummarized);
 router.get("/summary", Controller.getSummary);
+router.patch("/users/:id", Controller.updateUserById);
 
 module.exports = router;
