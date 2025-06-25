@@ -8,6 +8,7 @@ const { createServer } = require("node:http");
 const { Server } = require("socket.io");
 const router = require("./routers/router");
 const errorHandler = require("./middlewares/errorHandler");
+const Controller = require("./controllers/controller");
 
 const app = express();
 
@@ -26,34 +27,36 @@ const io = new Server(server, {
   },
 });
 
-io.on("connection", (socket) => {
+io.on("connect", (socket) => {
   console.log(`New user connected: ${socket.id}`);
 
   socket.on("userConnected", (username) => {
-    console.log(`User ${username} (${socket.id}) connected.`);
+    socket.username = username;
+
     io.emit("message", {
-      username: "Server",
-      message: `${username} has joined the chat.`,
+      username: "System",
+      message: `${username} has joined the chat`,
     });
   });
 
   socket.on("chatMessage", (data) => {
-    if (data && data.username && data.message) {
-      console.log(`A message from ${data.username}: ${data.message}`);
+    if (data && data.userId && data.username && data.message) {
+      Controller.postMessageByServer(data.userId, data.message);
+      // const foundUser = Controller.findUserById(userId);
+
       io.emit("message", {
         username: data.username,
         message: data.message,
       });
-    } else {
-      console.log(`Received: ${data}`);
     }
   });
 
-  socket.on("disconnect", (username) => {
-    console.log(`User ${username} (${socket.id}) disconnected.`);
+  socket.on("disconnect", () => {
+    const disconnectedUsername = socket.username || "Someone";
+
     io.emit("message", {
-      username: "Server",
-      message: `${username} has left the chat.`,
+      username: "System",
+      message: `${disconnectedUsername} has left the chat.`,
     });
   });
 });

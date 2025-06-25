@@ -40,6 +40,10 @@ module.exports = (sequelize, DataTypes) => {
           },
         },
       },
+      isSummarized: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+      },
     },
     {
       sequelize,

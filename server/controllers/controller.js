@@ -1,7 +1,8 @@
 const { compareHash } = require("../helpers/bcrypt");
 const { generateToken } = require("../helpers/jwt");
 const { OAuth2Client } = require("google-auth-library");
-const { User } = require("../models");
+const { User, Message } = require("../models");
+const summarizeByAi = require("../helpers/gemini");
 
 class Controller {
   // ========== user ==========
@@ -23,13 +24,13 @@ class Controller {
         throw new Error("INVALID_CREDENTIALS");
       }
 
-      const payload = {
+      const access_token = generateToken({
         id: foundUser.id,
         username: foundUser.username,
         email: foundUser.email,
-      };
-
-      const access_token = generateToken(payload);
+        imgUrl: foundUser.imgUrl,
+        role: foundUser.role,
+      });
 
       res.status(200).json({
         access_token,
@@ -75,6 +76,8 @@ class Controller {
         id: user.id,
         username: user.username,
         email: user.email,
+        imgUrl: user.imgUrl,
+        role: user.role,
       });
 
       res.status(200).json({
@@ -87,11 +90,194 @@ class Controller {
 
   static async postRegister(req, res, next) {
     try {
-      res.status(501).json({
-        message: "Not implemented yet",
+      const { username, email, password } = req.body();
+
+      if (!username || !email || !password) {
+        throw new Error("EMPTY_USERNAME_PASSWORD");
+      }
+
+      const createdUser = await User.create({
+        username,
+        email,
+        password,
+      });
+
+      res.status(201).json({
+        message: "Success create user",
+        data: {
+          id: createdUser.id,
+          username: createdUser.username,
+          email: createdUser.email,
+        },
       });
     } catch (error) {
       next(error);
+    }
+  }
+
+  // ========== message ==========
+  static async getMessages(req, res, next) {
+    try {
+      let messages = await Message.findAll({
+        include: {
+          model: User,
+        },
+        order: [["createdAt", "ASC"]],
+      });
+
+      messages = messages.map((message) => {
+        return {
+          username: message.User.username,
+          message: message.message,
+        };
+      });
+
+      res.status(200).json({
+        message: messages,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async postMessage(req, res, next) {
+    try {
+      const { userId, message } = req.body;
+
+      const createdMessage = await Message.create({
+        userId,
+        message,
+      });
+
+      res.status(201).json({
+        message: "Success create message",
+        data: {
+          id: createdMessage.id,
+          userId: createdMessage.userId,
+          message: createdMessage.message,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async updateMessageById(req, res, next) {
+    try {
+      const { id } = req.params;
+
+      const { userId, message } = req.body;
+
+      const foundMessage = await Message.findByPk(+id);
+
+      if (!foundMessage) {
+        throw new Error("INVALID_ID");
+      }
+
+      await Message.update(
+        {
+          userId,
+          message,
+        },
+        {
+          where: {
+            id: +id,
+          },
+        }
+      );
+
+      res.status(200).json({
+        message: "Success update message",
+        data: {
+          id: foundMessage.id,
+          userId: foundMessage.userId,
+          message: foundMessage.message,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async deleteMessageById(req, res, next) {
+    try {
+      const { id } = req.params;
+
+      const foundMessage = await Message.findByPk(+id);
+
+      if (!foundMessage) {
+        throw new Error("INVALID_ID");
+      }
+
+      await Message.destroy({
+        where: {
+          id: +id,
+        },
+      });
+
+      res.status(200).json({
+        message: "Success delete message",
+        data: {
+          id: foundMessage.id,
+          userId: foundMessage.userId,
+          message: foundMessage.message,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async updateMessageIsSummarized(req, res, next) {
+    try {
+      const { isSummarized } = req.body;
+
+      await Message.update(
+        {
+          isSummarized,
+        },
+        {
+          where: {},
+        }
+      );
+
+      res.status(200).json({
+        message: "Success update all messages to summarized",
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async getSummary(req, res, next) {
+    try {
+      const messages = await Message.findAll({
+        where: {
+          isSummarized: false,
+        },
+      });
+
+      const summary = await summarizeByAi(
+        messages.map((message) => message.message).join("\n\n")
+      );
+
+      res.status(200).json({
+        message: summary,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ========== server ==========
+  static async postMessageByServer(userId, message) {
+    try {
+      const createdMessage = await Message.create({
+        userId,
+        message,
+      });
+    } catch (error) {
+      throw new Error("INVALID_ID");
     }
   }
 }
