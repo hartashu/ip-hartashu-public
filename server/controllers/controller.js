@@ -304,8 +304,6 @@ class Controller {
       const { id } = req.params;
       const { imgUrl } = req.body;
 
-      console.log("MASUK CONTROLLER UPDATE USER BY ID");
-
       const foundUser = await User.findByPk(+id);
 
       if (!foundUser) {
@@ -322,6 +320,7 @@ class Controller {
           },
         }
       );
+      console.log("MASUK CONTROLLER UPDATE USER BY ID", foundUser);
 
       res.status(200).json({
         message: "Success update user",

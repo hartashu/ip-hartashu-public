@@ -1,30 +1,79 @@
 import { useEffect, useState, useRef } from "react";
+import { useNavigate } from "react-router";
 import { io } from "socket.io-client";
 import { jwtDecode } from "jwt-decode";
 import baseUrl from "../api/baseUrl";
 import showToast from "../utils/toast";
 import axios from "axios";
 import Toastify from "toastify-js";
+import { fetchChat, addMessage } from "../features/chatSlice";
 
-const getAvatarUrl = (username) => {
-  if (!username) {
-    return "https://api.dicebear.com/7.x/miniavs/svg?seed=hacker";
+import { useSelector, useDispatch } from "react-redux";
+
+const getAvatarUrl = (usernameOrSvgString) => {
+  // if (
+  //   usernameOrSvgString &&
+  //   typeof usernameOrSvgString === "string" &&
+  //   usernameOrSvgString.startsWith("<svg")
+  // ) {
+  //   // If it's an SVG string, convert it to a Data URL
+  //   const encodedSvg = encodeURIComponent(usernameOrSvgString)
+  //     .replace(/'/g, "%27")
+  //     .replace(/"/g, "%22");
+  //   return `data:image/svg+xml;charset=utf-8,${encodedSvg}`;
+  // }
+
+  if (!usernameOrSvgString) {
+    console.log("QWERQWERWRQWRQR", usernameOrSvgString);
+    return "https://api.dicebear.com/7.x/miniavs/svg?seed=programmer";
   }
 
   return `https://api.dicebear.com/7.x/miniavs/svg?seed=${encodeURIComponent(
-    username
+    usernameOrSvgString
   )}`;
 };
 
 const SocketClient = () => {
+  const navigate = useNavigate();
+  const [isLoading, setIsLoading] = useState(false);
   const [userId, setUserId] = useState("");
   const [username, setUsername] = useState("");
-  const [imgurl, setImgUrl] = useState("");
+  const [imgUrl, setImgUrl] = useState("");
   const [message, setMessage] = useState("");
-  const [receivedMessages, setReceivedMessages] = useState([]);
+  // const [receivedMessages, setReceivedMessages] = useState([]);
   const [socket, setSocket] = useState(null);
   const [summary, setSummary] = useState("");
   const messagesEndRef = useRef(null);
+
+  const { chat: receivedMessages } = useSelector((state) => state.chat);
+  const dispatch = useDispatch();
+
+  const fetchAvatarAndUpdatePhoto = async () => {
+    try {
+      const response = await axios.get(
+        `https://api.dicebear.com/7.x/miniavs/svg?seed=${encodeURIComponent(
+          username
+        )}`,
+        {
+          responseType: "text",
+        }
+      );
+
+      const { data } = await axios.patch(
+        `${baseUrl}/users/${userId}`,
+        {
+          imgUrl: response.data,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+          },
+        }
+      );
+    } catch (error) {
+      console.log("Avatar error:", error);
+    }
+  };
 
   const fetchMessages = async () => {
     try {
@@ -34,7 +83,7 @@ const SocketClient = () => {
         },
       });
 
-      setReceivedMessages(data.message);
+      // setReceivedMessages(data.message);
       // console.log(data.message);
     } catch (error) {
       console.error("Error fetching messages:", error);
@@ -43,8 +92,13 @@ const SocketClient = () => {
   };
 
   useEffect(() => {
-    fetchMessages();
-  }, []);
+    // fetchMessages();
+    fetchAvatarAndUpdatePhoto();
+  }, [userId, username]);
+
+  useEffect(() => {
+    dispatch(fetchChat());
+  }, [dispatch, username, userId]);
 
   useEffect(() => {
     setUserId(jwtDecode(localStorage.getItem("access_token")).id);
@@ -60,16 +114,29 @@ const SocketClient = () => {
 
     newSocket.on("message", (data) => {
       if (data.username && data.message) {
-        setReceivedMessages((prevMessages) => [...prevMessages, data]);
+        // setReceivedMessages((prevMessages) => [...prevMessages, data]);
+        dispatch(addMessage(data));
       } else {
-        setReceivedMessages((prevMessages) => [
-          ...prevMessages,
-          {
+        // setReceivedMessages((prevMessages) => [
+        //   ...prevMessages,
+        //   {
+        //     username: "System",
+        //     message: data.message,
+        //   },
+        // ]);
+
+        dispatch(
+          addMessage({
             username: "System",
             message: data.message,
-          },
-        ]);
+          })
+        );
       }
+    });
+
+    newSocket.on("summaryBroadcast", (data) => {
+      console.log(data);
+      dispatch(addMessage(data));
     });
 
     newSocket.on("disconnect", () => {
@@ -79,11 +146,15 @@ const SocketClient = () => {
     return () => {
       newSocket.disconnect();
     };
-  }, [username, userId, imgurl]);
+  }, [username, userId, dispatch, navigate]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [receivedMessages]);
+
+  // useEffect(() => {
+  //   console.log(receivedMessages);
+  // }, [receivedMessages]);
 
   const sendMessage = async () => {
     try {
@@ -119,6 +190,8 @@ const SocketClient = () => {
 
   const handleSummarizeClick = async () => {
     try {
+      setIsLoading(true);
+
       const { data } = await axios.get(`${baseUrl}/summary`, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem("access_token")}`,
@@ -139,12 +212,13 @@ const SocketClient = () => {
         }
       );
 
+      /*
       Toastify({
         text: data.message,
         duration: 100000,
         close: true,
         gravity: "top",
-        position: "right", // Posisi umum untuk notifikasi sukses
+        position: "right",
         stopOnFocus: true,
         style: {
           background: "linear-gradient(to right, #4CAF50, #8BC34A)",
@@ -160,11 +234,16 @@ const SocketClient = () => {
           y: 20,
         },
       }).showToast();
+      */
+
+      setIsLoading(false);
 
       showToast("Messages summarized successfully", "success");
     } catch (error) {
       console.error("Error summarizing messages:", error);
       showToast("Failed to summarize messages", "error");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -183,12 +262,23 @@ const SocketClient = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center p-4 sm:p-6 lg:p-8 font-sans">
+      <div className="fixed top-4 right-4 z-50">
+        <button
+          className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg cursor-pointer text-xs"
+          onClick={() => {
+            localStorage.clear();
+            navigate("/login");
+          }}
+        >
+          Logout
+        </button>
+      </div>
       <div className="bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col w-full max-w-md md:max-w-lg lg:max-w-2xl h-[80vh] border border-gray-200">
         {/* Chat Header */}
         <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-4 shadow-md text-white rounded-t-xl flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-extrabold tracking-tight">
-              Cogni Chat
+              CogniChat
             </h1>
             <p className="text-sm opacity-90 mt-1">
               Logged in as:
@@ -199,9 +289,9 @@ const SocketClient = () => {
           {jwtDecode(localStorage.getItem("access_token")).role === "admin" && (
             <button
               onClick={handleSummarizeClick}
-              className="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 cursor-pointer"
+              className="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 cursor-pointer"
             >
-              Summarize (by AI)
+              {isLoading ? "Summarizing..." : "Summarize (by AI)"}
             </button>
           )}
         </div>
@@ -213,7 +303,7 @@ const SocketClient = () => {
               Start chatting! Your messages will appear here.
             </p>
           ) : (
-            receivedMessages.map((msg, index) => (
+            receivedMessages?.map((msg, index) => (
               <div
                 key={index}
                 className={`flex items-start gap-2 mb-4 ${
@@ -223,7 +313,10 @@ const SocketClient = () => {
                 {/* Avatar for other users' messages on the left */}
                 {msg.username !== username && (
                   <img
-                    src={getAvatarUrl(msg.username)}
+                    src={
+                      // msg?.imgUrl ||
+                      getAvatarUrl(msg?.username)
+                    }
                     alt="avatar"
                     className="w-8 h-8 rounded-full object-cover flex-shrink-0"
                   />
@@ -256,9 +349,12 @@ const SocketClient = () => {
                   </div>
                 </div>
                 {/* Avatar for current user's messages on the right */}
-                {msg.username === username && (
+                {msg?.username === username && (
                   <img
-                    src={getAvatarUrl(msg.username)}
+                    src={
+                      // msg?.imgUrl ||
+                      getAvatarUrl(msg?.username)
+                    }
                     alt={`${msg.username}'s avatar`}
                     className="w-8 h-8 rounded-full object-cover flex-shrink-0"
                   />
